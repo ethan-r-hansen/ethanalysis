@@ -125,3 +125,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Ignore the ipynb that I use for testing
+*.ipynb
