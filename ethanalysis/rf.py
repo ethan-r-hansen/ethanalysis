@@ -3,6 +3,7 @@ import skrf
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.axes
+import pandas as pd
 from typing import Callable, Any, Iterable
 
 
@@ -74,35 +75,112 @@ def impedance_from_s(s_matrix: np.ndarray) -> np.ndarray:
     """    
     return (1 + s_matrix)/(1 - s_matrix)
 
+# define function for getting list  of networks out from an input of either, single network or string to filepath
+# or list of networks or strings to filepaths
+def get_networks(network: str|skrf.network.Network|list[str|skrf.network.Network])->list[skrf.network.Network]:
+    """
+    Function to input a network or list of networks and return a list of skrf.Network objects. This is useful for
+    when you want to input a single network, or a list of networks, and return a list of skrf.Network objects that
+    can be used for plotting or other analysis.
+
+    Parameters
+    ----------
+    network : str|skrf.network.Network|list[str|skrf.network.Network]
+        Either a single network, a list of networks, a single string to a filepath, or a list of strings to filepaths.
+
+    Returns
+    -------
+    list[skrf.network.Network]
+        List of skrf.Network objects that can be used for plotting or other analysis.
+    """    
+    # Check if the input is a list of networks or a single network that isn't a list (single list of one network is fine)
+    if isinstance(network, str):
+        #TODO: Add the ability to get the frequency array to and return it as well as freqs
+        try:
+            nets = [skrf.Network(file=network)]
+        except: print('Issue importing network from filename.')
+    elif isinstance(network, skrf.network.Network):
+        nets = [network]
+    elif isinstance(network, list):
+        nets = []
+        for net in network:
+            if isinstance(net, str):
+                try:
+                    nets.append(skrf.Network(file=net))
+                except: print('Issue importing network from filename.')
+            elif isinstance(net, skrf.network.Network):
+                nets.append(net)
+            else:
+                print('Issue with input list. Check that all entries are either strings to filepaths or skrf.Network objects.')
+    else:
+        print('Issue with input. Check that input is either a string to a filepath, a skrf.Network object, or a list of either.')
+    return nets
+
+# Creating a function to get the frequency array in provided units (Hz, kHz, MHz, GHz) from a network
+def get_freq(network: skrf.network.Network,
+             units: str='GHz')->np.ndarray: 
+    """
+    Function to input a network and return the frequency array in the desired units.
+    
+    Parameters
+    ----------
+    network : skrf.network.Network
+        A single network
+    units : str, optional
+        String denoting the units you want the frequency array to be in, either 'Hz', 'kHz', 'MHz', or 'GHz' for now, by default 'GHz'
+        
+    Returns
+    -------
+    np.ndarray
+        Numpy array containing the frequency array in the desired units.
+    """
+    # Get the frequency array from the network
+    try:
+        freq = network.f
+    except: print('Issue with network. Cannot retrieve frequency array.')
+    # Convert the frequency array to the desired units
+    if units == 'Hz':
+        return freq
+    elif units == 'kHz':
+        return freq / 1e3
+    elif units == 'MHz':
+        return freq / 1e6
+    elif units == 'GHz':
+        return freq / 1e9
+    else:
+        raise Exception('Invalid units string input! Try "Hz", "kHz", "MHz", or "GHz"')
+
 
 # Plotting functions
-def plot_s_parameters(network: str|skrf.network.Network,
-                      name = None,
+def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Network],
+                      names = None,
+                      datasets_to_plot = None,
                       s_to_plot: str = '11',
                       ax = None,
                       colors: list[str] = ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'],
+                      linestyles: list[str] = ['-','--',':','-.'],
                       title:str='S-Parameters',
                       font_size = 12,
                       x_range = None,
                       y_range = None): 
+    #TODO: Figure out a better way to deal with displaying the different datasets and how we color and display them. 
     #TODO: Pick new colors based on the one chart that Nick showed in his slides
     #TODO: Change all of these plotting parameters to be kwargs! Then write, if 'title' in kwargs.keys(). Just document the possible ones well.
     #TODO: add the docstrings for this function
-    #TODO: add the function to pass in different axes here. I imagine that I will make a wrapper for the grid plotting nick showed.
     #TODO: add the default to always have the upper xlim as 0
-    # Define network from either filename input or skrf.Network input
-    if isinstance(network, str):
-        try:
-            net = skrf.Network(file=network,
-                               name=name)
-        except: print('Issue importing network from filename.')
-    else:
-        net = network
-        
-    # Get the frequency array from the network
-    try:
-        freq = net.f / 1e9 # in GHz
-    except: print('Issue with network. Cannot retrieve frequency array.')
+    #TODO: Figure out how to deal with a list of networks and a list of names, while also dealing with a single network and a single name
+    #TODO: Add the ability to pass through which  datasets you want to plot. This can be either a list of indices or a list of strings corresponding to names
+    #TODO: Pass through the desired plotting units for the frequency axis (Hz, kHz, MHz, GHz) to pass to the get_freq function
+    # Get the network(s) from the input
+    nets = get_networks(network)
+    # Create the names array if one doesn't exist
+    if names is None:
+        names = [i for i in range(len(nets))]
+    # # Create a dictionary from the network(s) to easily access the data if different sets denoted by dataset_to_plot, with names as keys
+    # if datasets_to_plot is not None and names is not None:
+    #     # Create a temp array to store all of the networks in it
+    #     temp_nets = []
+    #     # Loop through the networks and names to create the dictionary
     
     # Create the figure if an existing axis was not provided. I will likely just use this for testing. 
     if ax == None:
@@ -117,16 +195,21 @@ def plot_s_parameters(network: str|skrf.network.Network,
         ax.set_ylabel('dB', fontsize=font_size) 
         
     # Raise error if weird ax is passed through 
-    elif not isinstance(matplotlib.axes._axes.Axes):
+    elif not isinstance(ax, matplotlib.axes._axes.Axes):
         raise Exception('user input "ax" argument that is not a true matplotlib axis...')
+    # Set show plot to false if an axis was passed through
+    else:
+        show_plot = False
         
-    # Now, loop through the parameters to plot.
-    for i, s_to_get in enumerate(s_to_plot.split(' ')):
-        # Plot the specific data, using my get_s_data function to convert '11' to the corresponding S11 data for example
-        ax.plot(freq,
-                get_s_data(net, s_to_get),
-                label=f'S{s_to_get}', #TODO: Add the names to the labels! This will make it easier to compare different devices
-                color=colors[i])
+    # Now, loop through the parameters to plot, and then plot for each dataset
+    for i, net in enumerate(nets):
+        for j, s_to_get in enumerate(s_to_plot.split(' ')):
+            # Plot the specific data, using my get_s_data function to convert '11' to the corresponding S11 data for example
+            ax.plot(get_freq(net, units='GHz'),
+                    get_s_data(net, s_to_get),
+                    label=f'{names[i]}: S{s_to_get}',
+                    color=colors[i],
+                    ls=linestyles[j])
     
     # Plot the defined range
     if x_range is not None:
@@ -151,29 +234,25 @@ def plot_s_parameters(network: str|skrf.network.Network,
 
     
 # TODO: Create function for plotting the smith data  
+#TODO: Add the ability to pass a networks class object that already has the preset names, networks, and even range to plot, can be overriden though
+#TODO: Add the option to choose the units for the frequency axis (Hz, kHz, MHz, GHz)
 # # Function to plot the smith chart data from a given s-parameter
 def plot_impedance(network: str|skrf.network.Network,
-                   name = None,
+                   names = None,
                    s_to_plot: str = '11',
                    ax = None,
                    colors: list[str] = ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'],
+                   linestyles: list[str] = ['-','--',':','-.'],
                    title:str='Impedance (Normalized to 50 Ohm)',
                    font_size = 12,
                    x_range = None,
                    y_range = None):
     
-    if isinstance(network, str):
-        try:
-            net = skrf.Network(file=network,
-                               name=name)
-        except: print('Issue importing network from filename.')
-    else:
-        net = network
-        
-    # Get the frequency array from the network
-    try:
-        freq = net.f / 1e9 # in GHz
-    except: print('Issue with network. Cannot retrieve frequency array.')
+    # Get the network(s) from the input
+    nets = get_networks(network)
+    # Create the names array if one doesn't exist
+    if names is None:
+        names = [i for i in range(len(nets))]
     
     # Create the figure if an existing axis was not provided. I will likely just use this for testing. 
     if ax == None:
@@ -186,27 +265,33 @@ def plot_impedance(network: str|skrf.network.Network,
             ax.set_title(title, fontsize=font_size)
         ax.set_xlabel('Frequency (GHz)', fontsize=font_size)
         ax.set_ylabel('Impedance (Norm. to 50 Ohm)', fontsize=font_size) 
-        
-    # Raise error if weird ax is passed through 
-    elif not isinstance(matplotlib.axes._axes.Axes):
-        raise Exception('user input "ax" argument that is not a true matplotlib axis...')
 
+    # Raise error if weird ax is passed through 
+    elif not isinstance(ax, matplotlib.axes._axes.Axes):
+        raise Exception('user input "ax" argument that is not a true matplotlib axis...')
+    # Set show plot to false if an axis was passed through
+    else:
+        show_plot = False
+
+    # Now, loop through the parameters to plot, and then plot for each dataset
+    for i, net in enumerate(nets):
     # Now calculate the impedance values and loop over each parameter defined by 
-    for i, s_to_get in enumerate(s_to_plot.split(" ")):
-        # get the s_data and convert it to impedance data
-        s_data = get_s_data(net, s_to_get, scale='linear')
-        imp_data = impedance_from_s(s_data)
-        # Plot the real
-        ax.plot(freq,
-                imp_data.real,
-                label=f'Re(z) from S{s_to_get}', #TODO: Add the names to the labels! This will make it easier to compare different devices
-                color=colors[i])
-        # Plot the imaginary
-        ax.plot(freq,
-                imp_data.imag,
-                label=f'Im(z) from S{s_to_get}', #TODO: Add the names to the labels! This will make it easier to compare different devices
-                color=colors[i],
-                ls='--')
+        for j, s_to_get in enumerate(s_to_plot.split(" ")):
+            # get the s_data and convert it to impedance data
+            s_data = get_s_data(net, s_to_get, scale='linear')
+            imp_data = impedance_from_s(s_data)
+            # Plot the real
+            ax.plot(get_freq(net, units='GHz'),
+                    imp_data.real,
+                    label=f'{names[i]}: Re(z) from S{s_to_get}', 
+                    color=colors[2*i],
+                    ls=linestyles[j])
+            # Plot the imaginary
+            ax.plot(get_freq(net, units='GHz'),
+                    imp_data.imag,
+                    label=f'{names[i]}: Im(z) from S{s_to_get}',
+                    color=colors[2*i+1],
+                    ls=linestyles[j]) #TODO: Fix this so that the real is distringuisable from the imaginary (work with line styles, or just do two plots!)
     # Plot horizontal lines at zero and 1 to make viewing the plots much easier
     plt.axhline(y=0, color='k', alpha=0.5)
     plt.axhline(y=1, color='k', alpha=0.5)
@@ -260,3 +345,5 @@ def plot_impedance(network: str|skrf.network.Network,
 #                                      name=names)
         
 #TODO: Create a class called RFNetworks for working with and plotting multiple files
+#TODO: Have one of the inputs be a data, and one of the inputs be a simulation network
+# since that is mostly what I will be working with. 
