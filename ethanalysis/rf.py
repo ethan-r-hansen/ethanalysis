@@ -168,8 +168,6 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
     #TODO: Change all of these plotting parameters to be kwargs! Then write, if 'title' in kwargs.keys(). Just document the possible ones well.
     #TODO: add the docstrings for this function
     #TODO: add the default to always have the upper xlim as 0
-    #TODO: Figure out how to deal with a list of networks and a list of names, while also dealing with a single network and a single name
-    #TODO: Add the ability to pass through which  datasets you want to plot. This can be either a list of indices or a list of strings corresponding to names
     #TODO: Pass through the desired plotting units for the frequency axis (Hz, kHz, MHz, GHz) to pass to the get_freq function
     # Get the network(s) from the input
     nets = get_networks(network)
