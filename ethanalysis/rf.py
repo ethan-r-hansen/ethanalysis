@@ -5,11 +5,16 @@ import matplotlib.pyplot as plt
 import matplotlib.axes
 import pandas as pd
 from typing import Callable, Any, Iterable
+from fitting import fit_s11_resonance_dip
+from colors import get_color_list
 
+#TODO: Move this to the colors library
+# Create colors for fitting. Eventually I will make a colors library that I can import from
+fit_colors = get_color_list(['cyan', 'orange', 'blue', 'pink', 'yellow'], 2)
 
 # Function to get the specific S-data given a string input
 def get_s_data(network: skrf.network.Network,
-               s_to_get: str,
+               s_to_get: str = '11',
                scale: str = 'dB') -> np.ndarray:
     """
     Function to input a network and string of which S-paramter data to grab, '11' for example, and output the numpy
@@ -154,8 +159,10 @@ def get_freq(network: skrf.network.Network,
 # Plotting functions
 def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Network],
                       names = None,
-                      datasets_to_plot = None,
+                      nets_to_plot = 'all',
                       s_to_plot: str = '11',
+                      nets_to_fit_S11 = None,
+                      fit_range: list|str = 'all',
                       ax = None,
                       colors: list[str] = ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'],
                       linestyles: list[str] = ['-','--',':','-.'],
@@ -174,11 +181,14 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
     # Create the names array if one doesn't exist
     if names is None:
         names = [i for i in range(len(nets))]
-    # # Create a dictionary from the network(s) to easily access the data if different sets denoted by dataset_to_plot, with names as keys
-    # if datasets_to_plot is not None and names is not None:
-    #     # Create a temp array to store all of the networks in it
-    #     temp_nets = []
-    #     # Loop through the networks and names to create the dictionary
+    elif len(names) != len(nets):
+        raise Exception('The length of the names array does not match the length of the networks array!')
+    # Create the nets dictionary so that I can easily access and choose from the data
+    # If no names array is passed through, then it will simply be the index, as shown above
+    nets_dict = dict(zip(names, nets))
+    # If plotting all, set the nets_to_plot to the names of all of the networks
+    if nets_to_plot == 'all':
+        nets_to_plot = names
     
     # Create the figure if an existing axis was not provided. I will likely just use this for testing. 
     if ax == None:
@@ -199,15 +209,42 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
     else:
         show_plot = False
         
+    #TODO: Fix so that I can easilly call the frequency and s11 data from the dictionary
     # Now, loop through the parameters to plot, and then plot for each dataset
-    for i, net in enumerate(nets):
+    for i, name in enumerate(nets_to_plot):
         for j, s_to_get in enumerate(s_to_plot.split(' ')):
             # Plot the specific data, using my get_s_data function to convert '11' to the corresponding S11 data for example
-            ax.plot(get_freq(net, units='GHz'),
-                    get_s_data(net, s_to_get),
-                    label=f'{names[i]}: S{s_to_get}',
+            ax.plot(get_freq(nets_dict[name], units='GHz'),
+                    get_s_data(nets_dict[name], s_to_get),
+                    label=f'{name}: S{s_to_get}',
                     color=colors[i],
-                    ls=linestyles[j])
+                    ls=linestyles[j],
+                    lw=2)
+            
+    # Now to fit the S11 data if desired
+    if nets_to_fit_S11 is not None:
+        # Create dicts for the centers and Q factors to pass through
+        centers_dict = {}
+        q_factors_dict = {}
+        for i, name in enumerate(nets_to_fit_S11):
+            # Make sure that each entry is in the names array
+            if name not in names:
+                raise Exception(f'Network {name} is not in the names array!')
+            # run the fit
+            fit_result, q_fact, fit_plotting_data = fit_s11_resonance_dip(freq_data=get_freq(nets_dict[name], units='GHz'),
+                                                                          s11_data=get_s_data(nets_dict[name], s_to_get='11'),
+                                                                          fit_range=fit_range)
+            # add the center and Q factor to the dictionaries
+            centers_dict[name] = fit_result.params['l_center'].value
+            q_factors_dict[name] = q_fact
+            # Plot the fit
+            ax.plot(fit_plotting_data[0],
+                    fit_plotting_data[1],
+                    label=f'Fit {name} S11 \n (Q: {round(q_fact, 2)})\n (Center: {round(centers_dict[name], 2)} GHz)',
+                    color=fit_colors[i],
+                    ls='-.',
+                    lw=2)
+            
     
     # Plot the defined range
     if x_range is not None:
@@ -221,13 +258,20 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
         except:
             print('Issue with setting x_range, check that you input a proper list')
     # Plot the lengend now but to the right of the figure
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    # plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.legend(fancybox=True, framealpha=0.5)
     plt.grid(alpha=0.5)
         
+    #TODO: Fix this later so that I am outputing the results in a nicer way
     if show_plot:
         plt.show()
-        return fig, ax
+        if nets_to_fit_S11 is not None:
+            return fig, ax, centers_dict, q_factors_dict
+        else:
+            return fig, ax
     else:
+        if nets_to_fit_S11 is not None:
+            return ax, centers_dict, q_factors_dict
         return ax
 
     
