@@ -6,11 +6,13 @@ import matplotlib.axes
 import pandas as pd
 from typing import Callable, Any, Iterable
 from fitting import fit_s11_resonance_dip
-from colors import get_color_list
+from colors import get_color_list, get_color
+from matplotlib.lines import Line2D
 
 #TODO: Move this to the colors library
 # Create colors for fitting. Eventually I will make a colors library that I can import from
-fit_colors = get_color_list(['cyan', 'orange', 'blue', 'pink', 'yellow'], 2)
+fitting_colors = get_color_list(['cyan', 'orange', 'violet', 'pink', 'yellow'], 2)
+plot_colors = get_color_list(['cyan', 'orange', 'violet', 'pink', 'yellow'], 6)
 
 # Function to get the specific S-data given a string input
 def get_s_data(network: skrf.network.Network,
@@ -157,19 +159,24 @@ def get_freq(network: skrf.network.Network,
 
 
 # Plotting functions
-def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Network],
+def plot_s_parameters(networks: str|skrf.network.Network|list[str|skrf.network.Network],
                       names = None,
                       nets_to_plot = 'all',
                       s_to_plot: str = '11',
                       nets_to_fit_S11 = None,
                       fit_range: list|str = 'all',
                       ax = None,
-                      colors: list[str] = ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'],
+                      colors = None,
+                      fit_colors = None,
                       linestyles: list[str] = ['-','--',':','-.'],
-                      title:str='S-Parameters',
+                      title = 'S-Parameters',
                       font_size = 12,
                       x_range = None,
-                      y_range = None): 
+                      y_range = None,
+                      show_plot: bool = False,
+                      show_legend: bool = True,
+                      x_label: str = 'Frequency (GHz)',
+                      y_label: str = 'dB'): 
     #TODO: Figure out a better way to deal with displaying the different datasets and how we color and display them. 
     #TODO: Pick new colors based on the one chart that Nick showed in his slides
     #TODO: Change all of these plotting parameters to be kwargs! Then write, if 'title' in kwargs.keys(). Just document the possible ones well.
@@ -177,7 +184,7 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
     #TODO: add the default to always have the upper xlim as 0
     #TODO: Pass through the desired plotting units for the frequency axis (Hz, kHz, MHz, GHz) to pass to the get_freq function
     # Get the network(s) from the input
-    nets = get_networks(network)
+    nets = get_networks(networks)
     # Create the names array if one doesn't exist
     if names is None:
         names = [i for i in range(len(nets))]
@@ -195,20 +202,36 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
         # Define variable to show the plot at the end
         show_plot = True
         # Create the figure
-        fig, ax = plt.subplots(figsize = (8,6))
-        # Set the labels
-        if title is not None:
-            ax.set_title(title, fontsize=font_size)
-        ax.set_xlabel('Frequency (GHz)', fontsize=font_size)
-        ax.set_ylabel('dB', fontsize=font_size) 
-        
+        fig, ax = plt.subplots(figsize = (8,6), dpi=150)
     # Raise error if weird ax is passed through 
     elif not isinstance(ax, matplotlib.axes._axes.Axes):
         raise Exception('user input "ax" argument that is not a true matplotlib axis...')
     # Set show plot to false if an axis was passed through
     else:
         show_plot = False
+    # Now format the plot with the title and labels
+    if title is not None:
+        ax.set_title(title, fontsize=font_size)
         
+    # Set the axis labels
+    if x_label is not None:
+        ax.set_xlabel(x_label, fontsize=font_size)
+    if y_label is not None:
+        ax.set_ylabel(y_label, fontsize=font_size)
+    
+    # Set the colors for plotting
+    if fit_colors is None:
+        fit_colors = fitting_colors
+    elif not isinstance(fit_colors, list):
+        raise Exception('The fit_colors argument must be a list of strings!')
+    if colors is None:
+        colors = plot_colors
+    elif not isinstance(colors, list):
+        raise Exception('The colors argument must be a list of strings!')
+        
+    # Create array for the custom legend elements
+    legend_elements = []    
+    
     #TODO: Fix so that I can easilly call the frequency and s11 data from the dictionary
     # Now, loop through the parameters to plot, and then plot for each dataset
     for i, name in enumerate(nets_to_plot):
@@ -220,7 +243,8 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
                     color=colors[i],
                     ls=linestyles[j],
                     lw=2)
-            
+            # Add to the legend elements
+            legend_elements.append(Line2D([0], [0], color=colors[i], lw=2, label=f'{name} S{s_to_get}'))
     # Now to fit the S11 data if desired
     if nets_to_fit_S11 is not None:
         # Create dicts for the centers and Q factors to pass through
@@ -242,25 +266,33 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
                     fit_plotting_data[1],
                     label=f'Fit {name} S11 \n (Q: {round(q_fact, 2)})\n (Center: {round(centers_dict[name], 2)} GHz)',
                     color=fit_colors[i],
-                    ls='-.',
+                    ls='--',
                     lw=2)
+            
+            # Add to the legend elements
+            legend_elements.append(Line2D([0], [0], color=fit_colors[i], ls='--', lw=2, label=f'(Fit {name} S11 \nQ={round(q_fact, 0)})\nCenter={round(centers_dict[name], 2)} GHz)'))
             
     
     # Plot the defined range
     if x_range is not None:
         try:
-            plt.xlim(x_range)
+            ax.set_xlim(x_range)
         except:
             print('Issue with setting x_range, check that you input a proper list')
     if y_range is not None:
         try:
-            plt.ylim(y_range)
+            ax.set_ylim(y_range)
         except:
             print('Issue with setting x_range, check that you input a proper list')
     # Plot the lengend now but to the right of the figure
     # plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.legend(fancybox=True, framealpha=0.5)
-    plt.grid(alpha=0.5)
+    if show_legend:
+        ax.legend(handles=legend_elements, 
+                  loc='center left', 
+                  bbox_to_anchor=(1, 0.5), 
+                  fontsize=10, 
+                  frameon=False)
+    ax.grid(alpha=0.5)
         
     #TODO: Fix this later so that I am outputing the results in a nicer way
     if show_plot:
@@ -272,26 +304,31 @@ def plot_s_parameters(network: str|skrf.network.Network|list[str|skrf.network.Ne
     else:
         if nets_to_fit_S11 is not None:
             return ax, centers_dict, q_factors_dict
-        return ax
+        else:
+            return ax
 
     
 # TODO: Create function for plotting the smith data  
 #TODO: Add the ability to pass a networks class object that already has the preset names, networks, and even range to plot, can be overriden though
 #TODO: Add the option to choose the units for the frequency axis (Hz, kHz, MHz, GHz)
 # # Function to plot the smith chart data from a given s-parameter
-def plot_impedance(network: str|skrf.network.Network,
+def plot_impedance(networks: str|skrf.network.Network|list[str|skrf.network.Network],
                    names = None,
                    s_to_plot: str = '11',
+                   imp_to_plot: str = 'real',
                    ax = None,
                    colors: list[str] = ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'],
                    linestyles: list[str] = ['-','--',':','-.'],
-                   title:str='Impedance (Normalized to 50 Ohm)',
+                   title = 'Impedance (Normalized to 50 Ohm)',
                    font_size = 12,
                    x_range = None,
-                   y_range = None):
-    
+                   y_range = None,
+                   show_legend: bool = True,
+                   show_plot: bool = False,
+                   x_label: str = 'Frequency (GHz)'):
+    #TODO: Fix this imag_ax thing. I don't think that I want to use it anymore.
     # Get the network(s) from the input
-    nets = get_networks(network)
+    nets = get_networks(networks)
     # Create the names array if one doesn't exist
     if names is None:
         names = [i for i in range(len(nets))]
@@ -302,12 +339,7 @@ def plot_impedance(network: str|skrf.network.Network,
         show_plot = True
         # Create the figure
         fig, ax = plt.subplots(figsize = (8,6))
-        # Set the labels
-        if title is not None:
-            ax.set_title(title, fontsize=font_size)
-        ax.set_xlabel('Frequency (GHz)', fontsize=font_size)
-        ax.set_ylabel('Impedance (Norm. to 50 Ohm)', fontsize=font_size) 
-
+        
     # Raise error if weird ax is passed through 
     elif not isinstance(ax, matplotlib.axes._axes.Axes):
         raise Exception('user input "ax" argument that is not a true matplotlib axis...')
@@ -315,6 +347,15 @@ def plot_impedance(network: str|skrf.network.Network,
     else:
         show_plot = False
 
+    # Now format the plot with the title and labels
+    if title is not None:
+        ax.set_title(title, fontsize=font_size)
+    # Set the x label
+    if x_label is not None:
+        ax.set_xlabel('Frequency (GHz)', fontsize = font_size)
+
+    # Set dict to store the impedance data
+    imp_dict = {}
     # Now, loop through the parameters to plot, and then plot for each dataset
     for i, net in enumerate(nets):
     # Now calculate the impedance values and loop over each parameter defined by 
@@ -322,70 +363,273 @@ def plot_impedance(network: str|skrf.network.Network,
             # get the s_data and convert it to impedance data
             s_data = get_s_data(net, s_to_get, scale='linear')
             imp_data = impedance_from_s(s_data)
+            # add the impedance data to the dictionary
+            imp_dict[names[i]] = imp_data
             # Plot the real
-            ax.plot(get_freq(net, units='GHz'),
-                    imp_data.real,
-                    label=f'{names[i]}: Re(z) from S{s_to_get}', 
-                    color=colors[2*i],
-                    ls=linestyles[j])
+            if imp_to_plot == 'real':
+                ax.axhline(y=1, color=get_color('gray', 6), alpha=0.5, ls='-', lw=1.5)
+                ax.axhline(y=0, color=get_color('gray', 6), alpha=0.5, ls='-', lw=1.5)
+                ax.plot(get_freq(net, units='GHz'),
+                        imp_data.real,
+                        label=f'{names[i]}: Re(z) from S{s_to_get}', 
+                        color=colors[i],
+                        ls=linestyles[j],
+                        lw=2)
+                
+                ax.set_ylabel('Re(Z) / (50 $\Omega$)', fontsize=font_size) 
             # Plot the imaginary
-            ax.plot(get_freq(net, units='GHz'),
-                    imp_data.imag,
-                    label=f'{names[i]}: Im(z) from S{s_to_get}',
-                    color=colors[2*i+1],
-                    ls=linestyles[j]) #TODO: Fix this so that the real is distringuisable from the imaginary (work with line styles, or just do two plots!)
-    # Plot horizontal lines at zero and 1 to make viewing the plots much easier
-    plt.axhline(y=0, color='k', alpha=0.5)
-    plt.axhline(y=1, color='k', alpha=0.5)
+            elif imp_to_plot == 'imag':
+                ax.axhline(y=0, color=get_color('gray', 6), alpha=0.5, ls='-', lw=1.5)
+                ax.axhline(y=1, color=get_color('gray', 6), alpha=0.5, ls='-', lw=1.5)
+                ax.plot(get_freq(net, units='GHz'),
+                        imp_data.imag,
+                        label=f'{names[i]}: Im(z) from S{s_to_get}',
+                        color=colors[i],
+                        ls=linestyles[j],
+                        lw=2)
+                
+                ax.set_ylabel('Im(Z) / (50 $\Omega$)', fontsize=font_size) 
+            # Plot both
+            elif imp_to_plot == 'both':
+                ax.plot(get_freq(net, units='GHz'),
+                        imp_data.real,
+                        label=f'{names[i]}: Re(z) from S{s_to_get}', 
+                        color=colors[2*i],
+                        ls=linestyles[j],
+                        lw=2)
+                ax.plot(get_freq(net, units='GHz'),
+                        imp_data.imag,
+                        label=f'{names[i]}: Im(z) from S{s_to_get}',
+                        color=colors[2*i+1],
+                        ls=linestyles[j],
+                        lw=2)
+                ax.set_ylabel('Z / (50 $\Omega$)', fontsize=font_size) 
+            else:
+                raise Exception('Invalid imp_to_plot string input! Try "real", "imag", or "both"')
+    
+
     
     # Plot the defined range
     if x_range is not None:
         try:
-            plt.xlim(x_range)
+            ax.set_xlim(x_range)
         except:
             print('Issue with setting x_range, check that you input a proper list')
     if y_range is not None:
         try:
-            plt.ylim(y_range)
+            ax.set_ylim(y_range)
         except:
-            print('Issue with setting x_range, check that you input a proper list')
+            print('Issue with setting _range, check that you input a proper list')
     # Plot the lengend now but to the right of the figure
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.grid(alpha=0.5)
+    if show_legend:
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.grid(alpha=0.5)
         
     if show_plot:
         plt.show()
-        return fig, ax
+        return fig, ax, imp_dict
     else:
-        return ax
-# Create a class for dealing with multiple Networks, can either pass in a list of networks or a list of filenames
-# class RFNetworks():
-#     """
-#     Class representing RF Network data from either a VNA or Simulation software. Currently only accepts touchstone files
-    
-#     Attributes:
-#         file (str|list[str]): path to the file/files you want to load. Currently only accepts .sNp files. Can be array of one file.
-#         name (str|list[str]): user defined name/names corresponding to the files imported. 
-#             These can be used to call back the specific data set. 
-#             If no name is provided, it will default to [0, 1, 2, etc..]
-#     """    
-#     def __init__(self, 
-#                  files: str|list[str],
-#                  names: str|list[str]):
-#         #TODO: Add option to pass through the design parameters.
-#         #TODO: This will accept an array of 'files' and a string of names so that you can label them easily
-#         # And then you will be able to call the names if you want to. That is the hope? Make this easy to use.
-#         # I am imagining that this will be used when comparing device parameters
-#         # Then you will use the name to access the data? Make this less complex
-#         # Initialize files, turn them into an array if single str input
-#         if isinstance(files, str):
-#             self.filenames = [files]
-#             self.names = [names]
-        
-#         # Initialize the RF network
-#         self.networks = skrf.Network(file=files,
-#                                      name=names)
+        return ax, imp_dict
+
         
 #TODO: Create a class called RFNetworks for working with and plotting multiple files
 #TODO: Have one of the inputs be a data, and one of the inputs be a simulation network
 # since that is mostly what I will be working with. 
+
+# Function to plot the s data in one subplot and the impedance data in another
+def plot_s11_and_impedance(networks: str|skrf.network.Network|list[str|skrf.network.Network],
+                           names = None,
+                           nets_to_plot = 'all',
+                           nets_to_fit = None,
+                           imps_to_plot = 'all', #TODO: Add the ability to plot the impedance data to plot
+                           fit_range: str|list = 'all',
+                           fig_size: tuple = (8, 10),
+                           dpi: int = 150,
+                           x_range = None,
+                           s_y_range = None,
+                           re_y_range = [-1, 3],
+                           im_y_range = [-2, 2],
+                           main_colors = ['cyan', 'orange', 'violet', 'pink', 'yellow']):
+    #TODO: Add docstrings
+    #TODO: Add the ability to change the title in the future, figure out how I want to format this.
+    # Get the colors 
+    s_colors = get_color_list(main_colors, 9)
+    fit_colors = get_color_list(main_colors, 3)
+    re_colors = get_color_list(main_colors, 5)
+    imag_colors = get_color_list(main_colors, 3)
+    
+    # if no names are passed through, then set the names to be the index of the networks
+    if names is None:
+        names = [i for i in range(len(nets))]
+    # Get the networks
+    nets = get_networks(networks)
+    # Create the nets dictionary so that I can easily access and choose from the data
+    nets_dict = dict(zip(names, nets))
+    # if the nets_to_plot is set to all, then set it to the names
+    if nets_to_plot == 'all':
+        nets_to_plot = names
+    if nets_to_fit is not None:
+        if isinstance(nets_to_fit, str):
+            if nets_to_fit == 'all':
+                nets_to_fit = names
+            else:
+                raise Exception('The nets_to_fit argument must be either a list of strings or the string \'all\'')
+
+    # Create the figure and axes to plot the data
+    fig, ax = plt.subplots(3, 1, 
+                        sharex=True,
+                        gridspec_kw={'height_ratios': [2, 1, 1], 'hspace': 0.05}, 
+                        figsize=(8, 10), dpi=150)
+    
+    # Now plot the S11 data on the first panel, but check if the fit is desired
+    if nets_to_fit is not None:
+        _, cents_dict, qs_dict = plot_s_parameters(networks=networks,
+                                                    names=names,
+                                                    nets_to_plot=nets_to_plot,
+                                                    s_to_plot='11',
+                                                    nets_to_fit_S11=nets_to_fit,
+                                                    fit_range=[7.1, 10],
+                                                    ax=ax[0],
+                                                    colors=s_colors,
+                                                    fit_colors=fit_colors,
+                                                    title=None,
+                                                    x_range=x_range,
+                                                    y_range=s_y_range,
+                                                    show_legend=False,
+                                                    show_plot=False,
+                                                    x_label=None)
+        
+        # Create a custom legend for the s11 plot
+        s_legend_elements = [Line2D([0], [0], color=s_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)] + \
+                            [Line2D([0], [0], color=fit_colors[i], ls='--', lw=2, label=f'(Fit {name}\nCenter={cents_dict[name]:.2f} GHz \n Q={qs_dict[name]:.0f})') for i, name in enumerate(nets_to_fit)]
+        ax[0].legend(handles=s_legend_elements, 
+                     loc='center left', 
+                     bbox_to_anchor=(1, 0.5), 
+                     fontsize=10, 
+                     frameon=False, 
+                     title=r'$\bf{S11}$')
+        
+        # Now for the impedance data
+        # For the real data
+        _ , imp_dict = plot_impedance(networks=networks,
+                                       names=names,
+                                       imp_to_plot='real',
+                                       x_range=x_range,
+                                       y_range=re_y_range,
+                                       ax=ax[1],
+                                       title=None,
+                                       colors=re_colors,
+                                       show_legend=False,
+                                       x_label=None)
+        
+        # For the imaginary data
+        plot_impedance(networks=networks,
+                       names=names,
+                       imp_to_plot='imag',
+                       x_range=x_range,
+                       y_range=im_y_range,
+                       ax=ax[2],
+                       title=None,
+                       colors=imag_colors,
+                       show_legend=False)
+        
+        # Now calculate the impedances at the center frequencies
+        imp_cents_dict = {}
+        for i, name in enumerate(nets_to_fit):
+            imp_cents_dict[name] = imp_dict[name][np.argmin(np.abs(get_freq(nets_dict[name], units='GHz') - cents_dict[name]))]
+            
+        # Now plot the center frequencies on the impedance plots
+        for i, ax_ in enumerate(ax[1:]):
+            for i, name in enumerate(names):
+                ax_.axvline(cents_dict[name], color=s_colors[i], linestyle='--', linewidth=2, alpha=0.5)
+        
+        # Now add the legends for the impedance plots
+        re_legend_elements = [Line2D([0], [0], color=re_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)] + \
+                             [Line2D([0], [0], color=s_colors[i], ls='--', lw=2, alpha=0.5, label=f'{cents_dict[name]:.2f} GHz \nZ={imp_cents_dict[name]*50:.2f} $\Omega$') for i, name in enumerate(nets_to_fit)]
+        # Now for the imaginary
+        im_legend_elements = [Line2D([0], [0], color=imag_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)] + \
+                             [Line2D([0], [0], color=s_colors[i], ls='--', lw=2, alpha=0.5, label=f'{cents_dict[name]:.2f} GHz \nZ={imp_cents_dict[name]*50:.2f} $\Omega$') for i, name in enumerate(nets_to_fit)]
+        # Now plot the legends
+        ax[1].legend(handles=re_legend_elements, 
+                     loc='center left', 
+                     bbox_to_anchor=(1, 0.5), 
+                     fontsize=10, 
+                     frameon=False, 
+                     title=r'$\bf{Re(Z)}$')
+        ax[2].legend(handles=im_legend_elements, 
+                     loc='center left', 
+                     bbox_to_anchor=(1, 0.5), 
+                     fontsize=10, 
+                     frameon=False, 
+                     title=r'$\bf{Im(Z)}$')
+
+    # Now if no fit is desired, then just plot all of the data
+    else:
+        plot_s_parameters(networks=networks,
+                          names=names,
+                          nets_to_plot=nets_to_plot,
+                          s_to_plot='11',
+                          nets_to_fit_S11=nets_to_fit,
+                          fit_range=[7.1, 10],
+                          ax=ax[0],
+                          colors=s_colors,
+                          fit_colors=fit_colors,
+                          title=None,
+                          x_range=x_range,
+                          y_range=s_y_range,
+                          show_legend=False,
+                          show_plot=False,
+                          x_label=None)
+        
+        # Create a custom legend for the s11 plot
+        s_legend_elements = [Line2D([0], [0], color=s_colors[0], lw=2, label='Dev1'),
+                            Line2D([0], [0], color=s_colors[1], lw=2, label='Sim Dev1')]
+        ax[0].legend(handles=s_legend_elements, 
+                     loc='center left', 
+                     bbox_to_anchor=(1, 0.5), 
+                     fontsize=10, 
+                     frameon=False, 
+                     title=r'$\bf{S11}$')
+        
+        # Now plot the impedance data on the second and third panels
+        # For the real data
+        _ , imp_dict = plot_impedance(networks=networks,
+                                       names=names,
+                                       imp_to_plot='real',
+                                       x_range=x_range,
+                                       y_range=re_y_range,
+                                       ax=ax[1],
+                                       title=None,
+                                       colors=re_colors,
+                                       show_legend=False,
+                                       x_label=None)
+        
+        # For the imaginary data
+        plot_impedance(networks=networks,
+                       names=names,
+                       imp_to_plot='imag',
+                       x_range=x_range,
+                       y_range=im_y_range,
+                       ax=ax[2],
+                       title=None,
+                       colors=imag_colors,
+                       show_legend=False)
+        
+        # Get the legend info
+        re_legend_elements = [Line2D([0], [0], color=re_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)]
+        im_legend_elements = [Line2D([0], [0], color=imag_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)]
+        # Create the legends
+        # Real
+        ax[1].legend(handles=re_legend_elements, 
+                     loc='center left', 
+                     bbox_to_anchor=(1, 0.5), 
+                     fontsize=10, 
+                     frameon=False, 
+                     title=r'$\bf{Re(Z)}$')
+        ax[2].legend(handles=im_legend_elements, 
+                     loc='center left', 
+                     bbox_to_anchor=(1, 0.5), 
+                     fontsize=10, 
+                     frameon=False, 
+                     title=r'$\bf{Im(Z)}$')
+    
