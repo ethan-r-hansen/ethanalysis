@@ -15,6 +15,58 @@ colors = ['cyan', 'orange', 'lime', 'violet', 'pink', 'yellow', 'blue', 'grape',
 fitting_colors = get_color_list(colors, 2)
 plot_colors = get_color_list(colors, 4)
 
+# Function to get parameters dictionary from a touchstone file
+def get_params_dict_from_touchstone(filepath: str) -> dict:
+    """
+    Get simulation parameters from a touchstone file saved from a CST simulation. CST saves the design parameters in a comment
+    at the top of the file, which is useful to grab if you are performing a parameter sweep!
+    
+    Parameters
+    ----------
+    filepath : str
+        String containing the filepath of the touchstone file.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing the parameters and their values.
+    """
+    test_file = skrf.Touchstone(filepath)
+    parameters = test_file.comments.split('\n')[3].split(' = ')[1][1:-1]
+    par_dict = dict((x.strip(), y.strip())
+                    for x, y in (element.split('=')
+                    for element in parameters.split('; '))
+                    )
+    return par_dict
+
+# Function to get an array of a chosen parameter from an array of touchstone filepaths.
+def get_param_array_from_touchstones(filepaths: str|list[str]|np.ndarray,
+                                     parameter: str) -> list:
+    """
+    Given a list of touchstone filepaths, return an array of the chosen parameter from each touchstone file. 
+    This is useful for when you are performing a sweep against a parameter from a simulation.
+    This has only been tested with touchstone files from CST simulations.
+    
+    Parameters
+    ----------
+    filepaths : str|list[str]|np.ndarray
+        String, list of strings, or numpy array of strings containing the filepaths of the touchstone files.
+    parameter : str
+        String containing the parameter to grab from each touchstone file.
+        
+    Returns
+    -------
+    list
+        List of the chosen parameter from each touchstone file.
+    """
+    if isinstance(filepaths, str):
+        filepaths = [filepaths]
+    print(type(filepaths))
+    if not isinstance(filepaths, np.ndarray) and not isinstance(filepaths, list):
+        raise TypeError('filepath must be a string, list, or numpy array')
+
+    return [float(param[parameter]) for param in [get_params_dict_from_touchstone(file) for file in filepaths]]
+
 # Function to get the specific S-data given a string input
 def get_s_data(network: skrf.network.Network,
                s_to_get: str = '11',
