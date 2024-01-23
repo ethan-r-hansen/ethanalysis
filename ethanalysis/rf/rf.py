@@ -229,7 +229,8 @@ def plot_s_parameters(networks: str|skrf.network.Network|list[str|skrf.network.N
                       show_plot: bool = False,
                       show_legend: bool = True,
                       x_label: str = 'Frequency (GHz)',
-                      y_label: str = 'dB'): 
+                      y_label: str = 'dB',
+                      label_S_in_legend: bool = False): 
     #TODO: Figure out a better way to deal with displaying the different datasets and how we color and display them. 
     #TODO: Pick new colors based on the one chart that Nick showed in his slides
     #TODO: Change all of these plotting parameters to be kwargs! Then write, if 'title' in kwargs.keys(). Just document the possible ones well.
@@ -292,12 +293,16 @@ def plot_s_parameters(networks: str|skrf.network.Network|list[str|skrf.network.N
             # Plot the specific data, using my get_s_data function to convert '11' to the corresponding S11 data for example
             ax.plot(get_freq(nets_dict[name], units='GHz'),
                     get_s_data(nets_dict[name], s_to_get),
-                    label=f'{name}: S{s_to_get}',
+                    label=f'{name} S{s_to_get}',
                     color=colors[i],
                     ls=linestyles[j],
                     lw=1.5)
             # Add to the legend elements
-            legend_elements.append(Line2D([0], [0], color=colors[i], lw=2, label=f'{name} S{s_to_get}'))
+            if label_S_in_legend:
+                legend_elements.append(Line2D([0], [0], color=colors[i], lw=2, label=f'{name} S{s_to_get}'))
+            else:
+                legend_elements.append(Line2D([0], [0], color=colors[i], lw=2, label=name))
+                
     # Now to fit the S11 data if desired
     if nets_to_fit_S11 is not None:
         # Create dicts for the centers and Q factors to pass through
