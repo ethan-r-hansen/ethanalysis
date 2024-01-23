@@ -5,14 +5,15 @@ import matplotlib.pyplot as plt
 import matplotlib.axes
 import pandas as pd
 from typing import Callable, Any, Iterable
-from fitting import fit_s11_resonance_dip
-from colors import get_color_list, get_color
+from ethanalysis.fitting.main import fit_s11_resonance_dip
+from ethanalysis.utils.colors import get_color_list, get_color
 from matplotlib.lines import Line2D
 
 #TODO: Move this to the colors library
+colors = ['cyan', 'orange', 'lime', 'violet', 'pink', 'yellow', 'blue', 'grape', 'green', 'gray']
 # Create colors for fitting. Eventually I will make a colors library that I can import from
-fitting_colors = get_color_list(['cyan', 'orange', 'violet', 'pink', 'yellow'], 2)
-plot_colors = get_color_list(['cyan', 'orange', 'violet', 'pink', 'yellow'], 6)
+fitting_colors = get_color_list(colors, 2)
+plot_colors = get_color_list(colors, 4)
 
 # Function to get the specific S-data given a string input
 def get_s_data(network: skrf.network.Network,
@@ -242,7 +243,7 @@ def plot_s_parameters(networks: str|skrf.network.Network|list[str|skrf.network.N
                     label=f'{name}: S{s_to_get}',
                     color=colors[i],
                     ls=linestyles[j],
-                    lw=2)
+                    lw=1.5)
             # Add to the legend elements
             legend_elements.append(Line2D([0], [0], color=colors[i], lw=2, label=f'{name} S{s_to_get}'))
     # Now to fit the S11 data if desired
@@ -267,7 +268,7 @@ def plot_s_parameters(networks: str|skrf.network.Network|list[str|skrf.network.N
                     label=f'Fit {name} S11 \n (Q: {round(q_fact, 2)})\n (Center: {round(centers_dict[name], 2)} GHz)',
                     color=fit_colors[i],
                     ls='--',
-                    lw=2)
+                    lw=1.5)
             
             # Add to the legend elements
             legend_elements.append(Line2D([0], [0], color=fit_colors[i], ls='--', lw=2, label=f'(Fit {name} S11 \nQ={round(q_fact, 0)})\nCenter={round(centers_dict[name], 2)} GHz)'))
@@ -453,7 +454,7 @@ def plot_s11_and_impedance(networks: str|skrf.network.Network|list[str|skrf.netw
     #TODO: Add docstrings
     #TODO: Add the ability to change the title in the future, figure out how I want to format this.
     # Get the colors 
-    s_colors = get_color_list(main_colors, 9)
+    s_colors = get_color_list(main_colors, 7)
     fit_colors = get_color_list(main_colors, 3)
     re_colors = get_color_list(main_colors, 5)
     imag_colors = get_color_list(main_colors, 3)
@@ -581,9 +582,10 @@ def plot_s11_and_impedance(networks: str|skrf.network.Network|list[str|skrf.netw
                           show_plot=False,
                           x_label=None)
         
+        re_legend_elements = [Line2D([0], [0], color=re_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)]
+        im_legend_elements = [Line2D([0], [0], color=imag_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)]
         # Create a custom legend for the s11 plot
-        s_legend_elements = [Line2D([0], [0], color=s_colors[0], lw=2, label='Dev1'),
-                            Line2D([0], [0], color=s_colors[1], lw=2, label='Sim Dev1')]
+        s_legend_elements = [Line2D([0], [0], color=s_colors[i], lw=2, label=name) for i, name in enumerate(nets_to_plot)]
         ax[0].legend(handles=s_legend_elements, 
                      loc='center left', 
                      bbox_to_anchor=(1, 0.5), 

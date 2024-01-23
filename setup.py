@@ -1,5 +1,4 @@
 from setuptools import setup, find_packages
-
 from ethanalysis import __version__
 
 setup(
@@ -17,5 +16,11 @@ setup(
         'numpy',
         'pandas'
     ],
-    #TODO: Add scikit-rf install requires section and all other required packages
+    classifiers=[
+        'Development Status :: 1 - Planning',
+        'Intended Audience :: Science/Research',
+        'Topic :: Scientific/Engineering :: Physics',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 3.11',
+    ],
 )

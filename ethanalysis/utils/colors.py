@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import matplotlib.colors as colors
+import matplotlib.colors as mcolors
+import numpy as np
 # library for using nice colors in plots
 # https://yeun.github.io/open-color/
 # define the colors
@@ -236,4 +237,35 @@ def rgba_to_hex(rgba: tuple) -> str:
     return f'#{r:02x}{g:02x}{b:02x}{a:02x}'
 
 # function to get a discrete colormap
-def get_discrete_colormap(paramaters: list|np.ndarray)
+def get_discrete_colormap(parameters: list|np.ndarray,
+                          colormap: str = 'PiYG',
+                          vmin: float = None,
+                          vmax: float = None) -> list:
+    """
+    Get a discrete colormap from a list of parameters, that is scaled by the parameter value.
+    
+    Parameters
+    ----------
+    paramaters : list|np.ndarray
+        List of parameters to scale the colormap by.
+    colormap : str
+        Matplotlib Colormap to use. Default is 'PiYG'.
+    vmin : float
+        Minimum value of the colormap. Default is None, which sets it to the minimum value of the parameters.
+    vmax : float
+        Maximum value of the colormap. Default is None, which sets it to the maximum value of the parameters.
+        
+    Returns
+    -------
+    list
+        List of colors in the colormap and the sm (ScalarMappable) object.
+    """
+    if vmin is None:
+        vmin = min(parameters)
+    if vmax is None:
+        vmax = max(parameters)
+    cmap = plt.colormaps[colormap]
+    norm = mcolors.Normalize(vmin, vmax)
+    # Create scalar mappable object that can be passed to a plt.colorbar() call and given axes to plot on
+    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+    return ([rgba_to_hex(sm.to_rgba(param)) for param in parameters], sm)
