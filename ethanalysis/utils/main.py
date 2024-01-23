@@ -99,3 +99,33 @@ def find_where_extremum(x_data: np.ndarray,
         # get the x index for the orignal data where the maximum value occurs in the truncated data
         max_index = np.where(x_data == max_x)[0][0]
         return max_x, max_y, max_index
+    
+def sort_lists(list1: list, 
+               sorting_list: list,
+               sort_by='ascending') -> (list, list):
+    """
+    Sorts two lists based on the values in the first list.
+    
+    Parameters
+    ----------
+    list1 : list
+        list to be sorted
+    sorting_list : list
+        list to sort by
+    sort_by : str
+        string to determine how to sort the lists. 'ascending' or 'descending' for now.
+        
+    Returns
+    -------
+    list1 : list
+        sorted list1
+    sorting_list: list
+        sorted list2
+    """
+    if sort_by == 'ascending':
+        sort_index = np.argsort(sorting_list)
+    elif sort_by == 'descending':
+        sort_index = np.argsort(sorting_list)[::-1]
+    else:
+        raise ValueError('sort_by must be ascending or descending')
+    return [list1[i] for i in sort_index], [sorting_list[i] for i in sort_index]
